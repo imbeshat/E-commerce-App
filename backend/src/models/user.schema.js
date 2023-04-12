@@ -28,7 +28,24 @@ const userSchema = new mongoose.Schema(
 		forgotPasswordToken: String,
 		forgotPasswordExpiry: Date,
 	},
-	{ timeseries: true }
+	{ timestamps: true }
 );
+
+// Encrypt password using bcrypt before saving : Hooks
+userSchema.pre("save", async function (next) {
+	if (!this.isModified("password")) {
+		return next();
+	}
+	this.password = await bcrypt.hash(this.password, 10); // 10 is the salt value
+	next();
+});
+
+// Compare user password : Methods
+userSchema.methods = {
+	// Compare user password
+	comparePassword: async function (enteredPassword) {
+		return await bcrypt.compare(enteredPassword, this.password);
+	},
+};
 
 export default mongoose.model("User", userSchema);
