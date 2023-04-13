@@ -7,6 +7,13 @@ export const cookieOptions = {
 	httpOnly: true,
 };
 
+/******************************************************
+ * @SIGNUP
+ * @route http://localhost:5000/api/auth/signup
+ * @description User signUp Controller for creating new user
+ * @returns User Object
+ ******************************************************/
+
 // sign up a new user
 export default signUp = asyncHandler(async (req, res) => {
 	// get data from user
@@ -47,5 +54,56 @@ export default signUp = asyncHandler(async (req, res) => {
 		success: true,
 		token,
 		user,
+	});
+});
+
+// login a user
+export const login = asyncHandler(async (req, res) => {
+	const { email, password } = req.body;
+
+	// check if user already exists i.e all validations
+	if (!email || !password) {
+		throw new CustomError("Please enter all fields", 400);
+	}
+
+	const user = User.findOne({ email }).select("+password");
+
+	//check if no user exists
+	if (!user) {
+		throw new CustomError("Invalid Credentials", 400);
+	}
+
+	// check if password matches
+	const isPasswordMatched = await user.comparePassword(password);
+
+	// if password does match
+	if (isPasswordMatched) {
+		const token = user.getJWTtoken();
+		user.password = undefined;
+
+		// store this token in user's cookie
+		res.cookie("token", token, cookieOptions); //this is an httpOnly cookie so it cannot be accessed by the user i.e. it is read only
+
+		// send back a response to the user
+		return res.status(200).json({
+			success: true,
+			token,
+			user,
+		});
+	} else {
+		throw new CustomError("Incorrect Password", 400);
+	}
+});
+
+// logout a user
+export const logout = asyncHandler(async (req, res) => {
+	res.cookie("token", null, {
+		expires: new Date(Date.now()),
+		httpOnly: true,
+	});
+
+	res.status(200).json({
+		success: true,
+		message: "Logged out",
 	});
 });
