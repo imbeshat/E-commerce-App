@@ -107,3 +107,17 @@ export const logout = asyncHandler(async (req, res) => {
 		message: "Logged out",
 	});
 });
+
+// Get profile of a user
+export const getProfile = asyncHandler(async (req, res) => {
+	const { user } = req;
+
+	if (!user) {
+		throw new CustomError("User not found", 401);
+	}
+
+	res.status(200).json({
+		success: true,
+		user,
+	});
+});
