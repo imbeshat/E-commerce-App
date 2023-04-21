@@ -155,3 +155,71 @@ export const deleteProduct = asyncHandler(async (req, res) => {
 		message: "Product deleted successfully",
 	});
 });
+
+// Update a product
+export const updateProduct = asyncHandler(async (req, res) => {
+	const { id: productId } = req.params;
+
+	let product = await Product.findById(productId);
+
+	if (!product) {
+		throw new CustomError("No product found", 404);
+	}
+
+	const form = formidable({ multiples: true, keepExtensions: true });
+	form.parse(req, async (err, fields, files) => {
+		if (err) {
+			throw new CustomError(err.message || "Something went wrong", 500);
+		}
+
+		// if any fiels is empty throw an error
+		if (!fields.name || !fields.description || !fields.price || !fields.collectionId) {
+			throw new CustomError("All fields are required", 400);
+		}
+
+		// delete the existing photos from the s3 bucket
+		const deletePhotos = Promise.all(
+			product.photos.map(async (elem, index) => {
+				await s3FileDelete({
+					bucketName: config.S3_BUCKET_NAME,
+					key: `products/${product._id.toString()}/photo_${index + 1}.png`,
+				});
+			})
+		);
+		await deletePhotos;
+
+		// upload the new photos to the s3 bucket
+		let imgArrayResponse = await Promise.all(
+			Object.keys(files).map(async (fileKey, index) => {
+				const element = files[fileKey];
+				const data = fs.readFileSync(element.filepath);
+
+				// upload the image to the s3 bucket
+				const upload = await s3FileUpload({
+					bucketName: config.S3_BUCKET_NAME,
+					key: `products/${productId}/photo_${index + 1}.png`,
+					body: data,
+					contentType: element.mimetype,
+				});
+				return {
+					secure_url: upload.Location,
+				};
+			})
+		);
+
+		// update the product and photo in the database
+		product = await Product.findByIdAndUpdate(
+			productId,
+			{
+				photos: imgArrayResponse,
+				...fields,
+			},
+			{ new: true }
+		);
+
+		res.status(200).json({
+			success: true,
+			product,
+		});
+	});
+});
