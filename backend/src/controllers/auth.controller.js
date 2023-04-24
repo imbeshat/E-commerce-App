@@ -1,6 +1,7 @@
 import asyncHandler from "../service/asyncHandler";
 import CustomError from "../service/CustomError";
 import User from "../models/user.schema.js";
+import mailHelper from "../utils/mailHelper.js";
 
 export const cookieOptions = {
 	expires: new Date(Date.now() + 3 * 30 * 24 * 60 * 60 * 1000),
@@ -57,6 +58,13 @@ export default signUp = asyncHandler(async (req, res) => {
 	});
 });
 
+/*********************************************************
+ * @LOGIN
+ * @route http://localhost:5000/api/auth/login
+ * @description User Login Controller for signing in the user
+ * @returns User Object
+ *********************************************************/
+
 // login a user
 export const login = asyncHandler(async (req, res) => {
 	const { email, password } = req.body;
@@ -95,6 +103,14 @@ export const login = asyncHandler(async (req, res) => {
 	}
 });
 
+/**********************************************************
+ * @LOGOUT
+ * @route http://localhost:5000/api/auth/logout
+ * @description User Logout Controller for logging out the user
+ * @description Removes token from cookies
+ * @returns Success Message with "Logged Out"
+ **********************************************************/
+
 // logout a user
 export const logout = asyncHandler(async (req, res) => {
 	res.cookie("token", null, {
@@ -108,6 +124,13 @@ export const logout = asyncHandler(async (req, res) => {
 	});
 });
 
+/**********************************************************
+ * @GET_PROFILE
+ * @route http://localhost:5000/api/auth/profile
+ * @description check token in cookies, if present then returns user details
+ * @returns Logged In User Details
+ **********************************************************/
+
 // Get profile of a user
 export const getProfile = asyncHandler(async (req, res) => {
 	const { user } = req;
@@ -118,6 +141,77 @@ export const getProfile = asyncHandler(async (req, res) => {
 
 	res.status(200).json({
 		success: true,
+		user,
+	});
+});
+
+// forgot password
+export const forgotPassword = asyncHandler(async (req, res) => {
+	const { email } = req.body;
+
+	if (!email) {
+		throw new CustomError("Email not found", 404);
+	}
+
+	const user = await User.findOne({ email });
+
+	if (!user) {
+		throw new CustomError("User not found", 404);
+	}
+
+	const resetToken = user.generateForgotPasswordToken();
+	await user.save({ validateBeforeSave: false });
+
+	const resetUrl = `${req.protocol}://${req.get("host")}/api/v1/auth/resetpassword/${resetToken}`;
+
+	const message = `Your password reset token is as follow: \n\n ${resetUrl} \n\n If you have not requested this email, then ignore it.`;
+
+	try {
+		await mailHelper.sendEmail({
+			email: user.email,
+			subject: "Password Reset Token",
+			message,
+		});
+	} catch (error) {
+		user.forgotPasswordToken = undefined;
+		user.forgotPasswordExpire = undefined;
+		await user.save({ validateBeforeSave: false });
+		throw new CustomError(error.message || "Email could not be sent", 500);
+	}
+});
+
+// reset password
+export const resetPassword = asyncHandler(async (req, res) => {
+	const { token: resetToken } = req.params;
+	const { password, confirmPassword } = req.body;
+	const resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+
+	if (password !== confirmPassword) {
+		throw new CustomError("Password do not match", 400);
+	}
+
+	const user = await User.findOne({
+		forgotPasswordToken: resetPasswordToken,
+		forgotPasswordExpiry: { $gt: Date.now() },
+	});
+
+	if (!user) {
+		throw new CustomError("Password reset token is Invalid", 400);
+	}
+
+	user.password = password;
+	user.forgotPasswordToken = undefined;
+	user.forgotPasswordExpiry = undefined;
+
+	await user.save();
+
+	//Below is the Optional code
+	const token = user.getJWTtoken();
+	res.cookie("token", token, cookieOptions);
+
+	res.status(200).json({
+		success: true,
+		token,
 		user,
 	});
 });
