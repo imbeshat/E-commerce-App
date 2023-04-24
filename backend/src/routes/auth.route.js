@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { getProfile, login, logout, signUp } from "../controllers/auth.controller";
 import { isLoggedIn } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -13,6 +14,6 @@ router.post("/login", login);
 router.post("/logout", logout);
 
 //get user profile route
-router.get("/profile", isLoggedIn, getUser);
+router.get("/profile", isLoggedIn, getProfile);
 
 export default router;
