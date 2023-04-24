@@ -162,7 +162,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 	const resetToken = user.generateForgotPasswordToken();
 	await user.save({ validateBeforeSave: false });
 
-	const resetUrl = `${req.protocol}://${req.get("host")}/api/v1/auth/resetpassword/${resetToken}`;
+	const resetUrl = `${req.protocol}://${req.get("host")}/api/v1/auth/password/reset/${resetToken}`;
 
 	const message = `Your password reset token is as follow: \n\n ${resetUrl} \n\n If you have not requested this email, then ignore it.`;
 
